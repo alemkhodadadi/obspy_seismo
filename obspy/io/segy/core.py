@@ -127,7 +127,7 @@ def _is_segy(file):
 
 
 def _read_segy(filename, headonly=False, byteorder=None,
-               textual_header_encoding=None, unpack_trace_headers=False,
+               textual_header_encoding=None, unpack_trace_headers=False, trace_duration:int=None,
                **kwargs):  # @UnusedVariable
     """
     Reads a SEG Y file and returns an ObsPy Stream object.
@@ -173,7 +173,8 @@ def _read_segy(filename, headonly=False, byteorder=None,
     segy_object = _read_segyrev1(
         filename, endian=byteorder,
         textual_header_encoding=textual_header_encoding,
-        unpack_headers=unpack_trace_headers)
+        unpack_headers=unpack_trace_headers,
+        trace_duration=trace_duration)
     # Create the stream object.
     stream = Stream()
     # SEGY has several file headers that apply to all traces. They will be
@@ -721,3 +722,4 @@ if __name__ == '__main__':
 # instance did not reliably work.
 setattr(Trace, '__original_str__', Trace.__str__)
 setattr(Trace, '__str__', _segy_trace_str_)
+

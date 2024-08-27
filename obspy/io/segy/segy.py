@@ -85,7 +85,7 @@ class SEGYFile(object):
     Class that internally handles SEG Y files.
     """
     def __init__(self, file=None, endian=None, textual_header_encoding=None,
-                 unpack_headers=False, headonly=False, read_traces=True):
+                 unpack_headers=False, headonly=False, read_traces=True, trace_duration=None):
         """
         Class that internally handles SEG Y files.
 
@@ -137,7 +137,7 @@ class SEGYFile(object):
         # Read the actual traces.
         if read_traces:
             [i for i in self._read_traces(
-                unpack_headers=unpack_headers, headonly=headonly)]
+                unpack_headers=unpack_headers, headonly=headonly, trace_duration=trace_duration)]
 
     def __str__(self):
         """
@@ -376,7 +376,7 @@ class SEGYFile(object):
         file.write(textual_header)
 
     def _read_traces(self, unpack_headers=False, headonly=False,
-                     yield_each_trace=False):
+                     yield_each_trace=False, trace_duration=None):
         """
         Reads the actual traces starting at the current file pointer position
         to the end of the file.
@@ -415,7 +415,8 @@ class SEGYFile(object):
             try:
                 trace = SEGYTrace(self.file, self.data_encoding, self.endian,
                                   unpack_headers=unpack_headers,
-                                  filesize=filesize, headonly=headonly)
+                                  filesize=filesize, headonly=headonly, 
+                                  trace_duration=trace_duration)
                 if yield_each_trace:
                     yield trace
                 else:
@@ -528,7 +529,8 @@ class SEGYTrace(object):
     Convenience class that internally handles a single SEG Y trace.
     """
     def __init__(self, file=None, data_encoding=4, endian='>',
-                 unpack_headers=False, filesize=None, headonly=False):
+                 unpack_headers=False, filesize=None, headonly=False,
+                 trace_duration=None):
         """
         Convenience class that internally handles a single SEG Y trace.
 
@@ -588,9 +590,9 @@ class SEGYTrace(object):
             else:
                 self.filesize = os.fstat(self.file.fileno())[6]
         # Otherwise read the file.
-        self._read_trace(unpack_headers=unpack_headers, headonly=headonly)
+        self._read_trace(unpack_headers=unpack_headers, headonly=headonly, trace_duration=trace_duration)
 
-    def _read_trace(self, unpack_headers=False, headonly=False):
+    def _read_trace(self, unpack_headers=False, headonly=False, trace_duration=None):
         """
         Reads the complete next header starting at the file pointer at
         self.file.
@@ -616,6 +618,18 @@ class SEGYTrace(object):
                                       unpack_headers=unpack_headers)
         # The number of samples in the current trace.
         npts = self.header.number_of_samples_in_this_trace
+
+        #This part is added by AleM for seismo 
+        #To make the function able to read the shity segy files from GSBs
+        if trace_duration is not None:
+            if  int(trace_duration) > 0:
+                si = self.header.sample_interval_in_ms_for_this_trace
+                npts_from_si = int((10**6/si)*(trace_duration/1000))
+                if(npts != npts_from_si):
+                    npts = npts_from_si
+            else:
+                raise ValueError("trace_duration must be a positive integer or None")
+        
         self.npts = npts
         # Do a sanity check if there is enough data left.
         pos = self.file.tell()
@@ -626,7 +640,9 @@ class SEGYTrace(object):
             msg = """
                   Too little data left in the file to unpack it according to
                   its trace header. This is most likely either due to a wrong
-                  byte order or a corrupt file.
+                  byte order or a corrupt file. if you are using _read_segy function 
+                  directly, try setting trace_duration. only if you know the length of 
+                  the traces in the segy file
                   """.strip()
             raise SEGYTraceReadingError(msg)
         if headonly:
@@ -914,7 +930,8 @@ class SEGYTraceHeader(object):
 
 
 def _read_segy(file, endian=None, textual_header_encoding=None,
-               unpack_headers=False, headonly=False):
+               unpack_headers=False, headonly=False, trace_duration=None):
+    print('step 2:', trace_duration)
     """
     Reads a SEG Y file and returns a SEGYFile object.
 
@@ -945,16 +962,19 @@ def _read_segy(file, endian=None, textual_header_encoding=None,
             return _internal_read_segy(
                 open_file, endian=endian,
                 textual_header_encoding=textual_header_encoding,
-                unpack_headers=unpack_headers, headonly=headonly)
+                unpack_headers=unpack_headers, headonly=headonly,
+                trace_duration=trace_duration)
     # Otherwise just read it.
     return _internal_read_segy(file, endian=endian,
                                textual_header_encoding=textual_header_encoding,
                                unpack_headers=unpack_headers,
-                               headonly=headonly)
+                               headonly=headonly,
+                               trace_duration=trace_duration)
 
 
 def _internal_read_segy(file, endian=None, textual_header_encoding=None,
-                        unpack_headers=False, headonly=False):
+                        unpack_headers=False, headonly=False,trace_duration=None):
+    print('step 3:', trace_duration)
     """
     Reads on open file object and returns a SEGYFile object.
 
@@ -979,7 +999,8 @@ def _internal_read_segy(file, endian=None, textual_header_encoding=None,
     """
     return SEGYFile(file, endian=endian,
                     textual_header_encoding=textual_header_encoding,
-                    unpack_headers=unpack_headers, headonly=headonly)
+                    unpack_headers=unpack_headers, headonly=headonly, 
+                    trace_duration=trace_duration)
 
 
 def iread_segy(file, endian=None, textual_header_encoding=None,
@@ -1250,7 +1271,8 @@ class SUFile(object):
                 # Always unpack with IEEE
                 trace = SEGYTrace(self.file, 5, self.endian,
                                   unpack_headers=unpack_headers,
-                                  headonly=headonly)
+                                  headonly=headonly,
+                                  trace_duration=None)
                 if yield_each_trace:
                     yield trace
                 else:
@@ -1437,3 +1459,4 @@ def autodetect_endian_and_sanity_check_su(file):
             the ObsPy developers so they can implement additional tests.
             """.strip()
         raise Exception(msg)
+
