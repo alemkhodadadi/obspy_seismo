@@ -236,8 +236,8 @@ class SEGYFile(object):
         # which is not supported so far.
         if bfh.number_of_3200_byte_ext_file_header_records_following != 0:
             msg = 'Extended textual headers are not yet supported. ' + \
-                'Please contact the developers. If you are using Obspy-seismo,' + \ 
-                'you can remove the Extended textual headers by using ' + \ 
+                'Please contact the developers. If you are using Obspy-seismo,' + \
+                'you can remove the Extended textual headers by using ' + \
                 'seismo_segy_remove_extended_headers from obspy.io.segy.core'
             raise NotImplementedError(msg)
 
