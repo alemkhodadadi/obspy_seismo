@@ -23,7 +23,7 @@ ___
 ___
 ___
 
-**Important: From the above 3-lines untill the next 3-lines is the instruction added for Obspy-seismo. The rest of the instructions are related to Obspy**
+**Note: The section between the two 3-line segments has been added specifically for Obspy-seismo. The rest of the instructions pertain to the main Obspy page.**
 
 ### Obspy-Seismo
 <a href="https://www.helsinki.fi/en/institute-seismology">
