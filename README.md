@@ -20,6 +20,10 @@
 <a rel="me" href="https://fosstodon.org/@obspy"><img src="https://img.shields.io/mastodon/follow/109309284431089274?domain=https%3A%2F%2Ffosstodon.org&style=social" alt="Mastodon Follow" /></a>
 
 ___
+___
+___
+
+**Important: From the above 3-lines untill the next 3-lines is the instruction added for Obspy-seismo. The rest of the instructions are related to Obspy**
 
 ### Obspy-Seismo
 <a href="https://www.helsinki.fi/en/institute-seismology">
@@ -38,13 +42,12 @@ The list of functions are:
 
   * seismo_read_segy_
   * seismo_segy_read_textual_header
-  * seismo_read_trace_headers
-  * seismo_get_segy_number_of_traces
+  * seismo_segy_read_trace_headers
+  * seismo_segy_get_number_of_traces
   * seismo_segy_remove_extended_headers
   * seismo_segy_read_extended_textual_headers
   * seismo_segy_read_num_samples_from_textual_header
   * seismo_segy_read_binary_header
-  * seismo_plot_two_streams_fdomain
 
 
 ```python
@@ -67,6 +70,8 @@ If ObsPy is already installed:
 
 <code>pip install --upgrade git+https://github.com/alemkhodadadi/obspy_seismo.git</code>
 
+___
+___
 ___
 
 

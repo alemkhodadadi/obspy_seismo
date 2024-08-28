@@ -334,7 +334,7 @@ def seismo_segy_read_textual_header(file_path):
         
         return decoded_header
 
-def seismo_read_trace_headers(file_path):
+def seismo_segy_read_trace_headers(file_path):
     directory, filename = os.path.split(file_path)
     base_name, _ = os.path.splitext(filename)
     output_file = os.path.join(directory, f"output_segy_traces_headers_{base_name}.txt")
@@ -562,7 +562,7 @@ def seismo_read_trace_headers(file_path):
             file.write("}\n")  # Close the dictionary and move to the next line for the next trace
 
 
-def seismo_get_segy_number_of_traces(file_path):
+def seismo_segy_get_number_of_traces(file_path):
     with open(file_path, 'rb') as file:
         file.seek(3200)
         binary_header = file.read(400)
