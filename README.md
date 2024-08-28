@@ -23,7 +23,7 @@ ___
 
 ### Obspy-Seismo
 <a href="https://www.helsinki.fi/en/institute-seismology">
-  <img src="https://www.helsinki.fi/assets/drupal/s3fs-public/styles/uncropped_image/public/migrated-unit-group-pages/pt5/body-images/134206-university-of-helsinki-logo.png.webp?itok=fkxkM1cs" alt="UH logo" style="width:300px; height:auto; background-color:white;">
+  <img src="https://www.helsinki.fi/assets/drupal/s3fs-public/styles/uncropped_image/public/migrated-unit-group-pages/pt5/body-images/134206-university-of-helsinki-logo.png.webp?itok=fkxkM1cs" alt="UH logo" style="width:60%; height:auto; background-color:white;">
 </a>
 
 
