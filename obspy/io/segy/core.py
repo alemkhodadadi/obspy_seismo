@@ -209,6 +209,631 @@ def _read_segy(filename, headonly=False, byteorder=None,
     return stream
 
 
+def seismo_read_segy_(filename, headonly=False, byteorder=None,
+               textual_header_encoding=None, unpack_trace_headers=False, trace_duration:int=None,
+               **kwargs):  # @UnusedVariable
+    """
+    This function if a copy of _read_segy_function of obspy.
+    all the input arguments are the same except trace_duration. 
+
+    :type trace_duration: int(microseconds), optional 
+    :param trace_duration: the length of each trace in microseconds
+    
+    Reads a SEG Y file and returns an ObsPy Stream object.
+
+    .. warning::
+        This function should NOT be called directly, it registers via the
+        ObsPy :func:`~obspy.core.stream.read` function, call this instead.
+
+    :type filename: str
+    :param filename: SEG Y rev1 file to be read.
+    :type headonly: bool, optional
+    :param headonly: If set to True, read only the header and omit the waveform
+        data.
+    :type byteorder: str or ``None``
+    :param byteorder: Determines the endianness of the file. Either ``'>'`` for
+        big endian or ``'<'`` for little endian. If it is ``None``, it will try
+        to autodetect the endianness. The endianness is always valid for the
+        whole file. Defaults to ``None``.
+    :type textual_header_encoding: str or ``None``
+    :param textual_header_encoding: The encoding of the textual header. Can be
+        ``'EBCDIC'``, ``'ASCII'`` or ``None``. If it is ``None``, autodetection
+        will be attempted. Defaults to ``None``.
+    :type unpack_trace_headers: bool, optional
+    :param unpack_trace_headers: Determines whether or not all trace header
+        values will be unpacked during reading. If ``False`` it will greatly
+        enhance performance and especially memory usage with large files. The
+        header values can still be accessed and will be calculated on the fly
+        but tab completion will no longer work. Look in the headers.py for a
+        list of all possible trace header values. Defaults to ``False``.
+    :returns: A an array of 3 ObsPy :class:`~obspy.core.stream.Stream` objects.
+        the streams are for components N, E and Z respectively
+
+    .. rubric:: Example
+
+    >>> from obspy import read
+    >>> st = read("/path/to/00001034.sgy_first_trace")
+    >>> st  # doctest: +ELLIPSIS
+    <obspy.core.stream.Stream object at 0x...>
+    >>> print(st)  # doctest: +ELLIPSIS
+    1 Trace(s) in Stream:
+    Seq. No. in line:    1 | 2009-06-22T14:47:37.000000Z - ... 2001 samples
+    """
+    # Read file to the internal segy representation.
+    segy_object = _read_segyrev1(
+        filename, endian=byteorder,
+        textual_header_encoding=textual_header_encoding,
+        unpack_headers=unpack_trace_headers,
+        trace_duration=trace_duration)
+    # Create the stream object.
+    stream = Stream()
+    # SEGY has several file headers that apply to all traces. They will be
+    # stored in Stream.stats.
+    stream.stats = AttribDict()
+    # Get the textual file header.
+    textual_file_header = segy_object.textual_file_header
+    # The binary file header will be a new AttribDict
+    binary_file_header = AttribDict()
+    for key, value in segy_object.binary_file_header.__dict__.items():
+        setattr(binary_file_header, key, value)
+    # Get the data encoding and the endianness from the first trace.
+    data_encoding = segy_object.traces[0].data_encoding
+    endian = segy_object.traces[0].endian
+    textual_file_header_encoding = segy_object.textual_header_encoding.upper()
+    # Add the file wide headers.
+    stream.stats.textual_file_header = textual_file_header
+    stream.stats.binary_file_header = binary_file_header
+    # Also set the data encoding, endianness and the encoding of the
+    # textual_file_header.
+    stream.stats.data_encoding = data_encoding
+    stream.stats.endian = endian
+    stream.stats.textual_file_header_encoding = \
+        textual_file_header_encoding
+
+    # Convert traces to ObsPy Trace objects.
+    for tr in segy_object.traces:
+        stream.append(tr.to_obspy_trace(
+            headonly=headonly,
+            unpack_trace_headers=unpack_trace_headers))
+
+    # Initialize empty streams for each component
+    N_stream = Stream()
+    E_stream = Stream()
+    Z_stream = Stream()
+
+    # Iterate through the traces and assign them to the correct stream
+    for trace in stream:
+        smu = trace.stats.segy.trace_header.source_measurement_unit
+        if smu == 512:
+            N_stream.append(trace)
+        elif smu == 768:
+            E_stream.append(trace)
+        elif smu == 1024:
+            Z_stream.append(trace)
+
+
+    return [N_stream, E_stream, Z_stream]
+
+
+def seismo_segy_read_textual_header(file_path):
+    # Function to read and decode the Textual Header
+    # Open the SEG-Y file in binary mode
+    with open(file_path, 'rb') as file:
+        # Read the first 3200 bytes (Textual Header)
+        textual_header = file.read(3200)
+        
+        # Try to decode the header using ASCII first
+        try:
+            decoded_header = textual_header.decode('ascii')
+        except UnicodeDecodeError:
+            # If ASCII decoding fails, it might be EBCDIC encoded
+            decoded_header = codecs.decode(textual_header, 'ebcdic-cp-us')
+        
+        return decoded_header
+
+def seismo_read_trace_headers(file_path):
+    directory, filename = os.path.split(file_path)
+    base_name, _ = os.path.splitext(filename)
+    output_file = os.path.join(directory, f"output_segy_traces_headers_{base_name}.txt")
+    trace_headers = []
+    
+    textual_header = read_textual_header(segy_file_path)
+    binary_header = read_binary_header(segy_file_path)
+
+    #finding ns
+    ns_in_binaryheader = binary_header['Number of Samples']
+    ns_in_textualheader, si_in_textualheader = read_num_samples_from_textual_header(textual_header)
+    ns = ns_in_binaryheader
+    if isinstance(ns_in_textualheader, int):
+        ns = int((10**6/si_in_textualheader)*60) #Geospace software always make traces length = 60s and also the sampling interval is in microseconds
+
+    # Calculate the offset to the first trace data (Textual Header + Binary Header + number of external textual headers)
+    num_ext_text_headers = binary_header['Number of Extended Textual File Header Records']
+    offset = 3200 + 400 + (num_ext_text_headers*3200)
+    
+    with open(file_path, 'rb') as file:
+        # Seek to the start of the first trace
+        file.seek(offset)
+        
+        while True:
+            # Read the 240-byte trace header
+            trace_header = file.read(240)
+            if len(trace_header) < 240:
+                break  # End of file or corrupt trace
+            
+            # Parse number of samples from trace header (bytes 115-116)
+            trace_seq_num_line = struct.unpack('>i', trace_header[0:4])[0]  # 1-4: Trace sequence number within line
+            trace_seq_num_file = struct.unpack('>i', trace_header[4:8])[0]  # 5-8: Trace sequence number within file
+            field_record_num = struct.unpack('>i', trace_header[8:12])[0]  # 9-12: Original field record number
+            trace_num_within_field = struct.unpack('>i', trace_header[12:16])[0]  # 13-16: Trace number within field
+            energy_source_point_num = struct.unpack('>i', trace_header[16:20])[0]  # 17-20: Energy source point number
+            ensemble_num = struct.unpack('>i', trace_header[20:24])[0]  # 21-24: Ensemble number
+            trace_num_within_ensemble = struct.unpack('>i', trace_header[24:28])[0]  # 25-28: Trace number within ensemble
+            trace_id_code = struct.unpack('>h', trace_header[28:30])[0]  # 29-30: Trace identification code
+            vert_sum_traces = struct.unpack('>h', trace_header[30:32])[0]  # 31-32: Number of vertically summed traces
+            horiz_sum_traces = struct.unpack('>h', trace_header[32:34])[0]  # 33-34: Number of horizontally stacked traces
+            data_use = struct.unpack('>h', trace_header[34:36])[0]  # 35-36: Data use
+            source_receiver_distance = struct.unpack('>i', trace_header[36:40])[0]  # 37-40: Source to receiver distance
+            receiver_group_elevation = struct.unpack('>i', trace_header[40:44])[0]  # 41-44: Receiver group elevation
+            surface_elevation_source = struct.unpack('>i', trace_header[44:48])[0]  # 45-48: Surface elevation at source
+            source_depth_below_surface = struct.unpack('>i', trace_header[48:52])[0]  # 49-52: Source depth below surface
+            datum_elevation_receiver_group = struct.unpack('>i', trace_header[52:56])[0]  # 53-56: Datum elevation at receiver group
+            datum_elevation_source = struct.unpack('>i', trace_header[56:60])[0]  # 57-60: Datum elevation at source
+            water_depth_source = struct.unpack('>i', trace_header[60:64])[0]  # 61-64: Water depth at source
+            water_depth_group = struct.unpack('>i', trace_header[64:68])[0]  # 65-68: Water depth at group
+            scalar_elevations = struct.unpack('>h', trace_header[68:70])[0]  # 69-70: Scalar for elevations and depths
+            scalar_coordinates = struct.unpack('>h', trace_header[70:72])[0]  # 71-72: Scalar for coordinates
+            source_coordinate_x = struct.unpack('>i', trace_header[72:76])[0]  # 73-76: Source coordinate - X
+            source_coordinate_y = struct.unpack('>i', trace_header[76:80])[0]  # 77-80: Source coordinate - Y
+            group_coordinate_x = struct.unpack('>i', trace_header[80:84])[0]  # 81-84: Group coordinate - X
+            group_coordinate_y = struct.unpack('>i', trace_header[84:88])[0]  # 85-88: Group coordinate - Y
+            coordinate_units = struct.unpack('>h', trace_header[88:90])[0]  # 89-90: Coordinate units
+            weathering_velocity = struct.unpack('>h', trace_header[90:92])[0]  # 91-92: Weathering velocity
+            subweathering_velocity = struct.unpack('>h', trace_header[92:94])[0]  # 93-94: Subweathering velocity
+            uphole_time_source_ms = struct.unpack('>h', trace_header[94:96])[0]  # 95-96: Uphole time at source
+            uphole_time_group_ms = struct.unpack('>h', trace_header[96:98])[0]  # 97-98: Uphole time at group
+            source_static_corr_ms = struct.unpack('>h', trace_header[98:100])[0]  # 99-100: Source static correction in milliseconds
+            group_static_corr_ms = struct.unpack('>h', trace_header[100:102])[0]  # 101-102: Group static correction in milliseconds
+            total_static_ms = struct.unpack('>h', trace_header[102:104])[0]  # 103-104: Total static applied in milliseconds
+            lag_time_A_ms = struct.unpack('>h', trace_header[104:106])[0]  # 105-106: Lag time A in milliseconds
+            lag_time_B_ms = struct.unpack('>h', trace_header[106:108])[0]  # 107-108: Lag time B in milliseconds
+            delay_recording_time_ms = struct.unpack('>h', trace_header[108:110])[0]  # 109-110: Delay recording time in milliseconds
+            mute_time_start_ms = struct.unpack('>h', trace_header[110:112])[0]  # 111-112: Mute time start in milliseconds
+            mute_time_end_ms = struct.unpack('>h', trace_header[112:114])[0]  # 113-114: Mute time end in milliseconds
+            num_samples = struct.unpack('>h', trace_header[114:116])[0]  # 115-116: Number of samples in this trace
+            sample_interval = struct.unpack('>h', trace_header[116:118])[0]  # 117-118: Sample interval in microseconds
+            gain_type = struct.unpack('>h', trace_header[118:120])[0]  # 119-120: Gain type of field instruments
+            instrument_gain_const = struct.unpack('>h', trace_header[120:122])[0]  # 121-122: Instrument gain constant (dB)
+            instrument_early_gain = struct.unpack('>h', trace_header[122:124])[0]  # 123-124: Instrument early or initial gain (dB)
+            correlated = struct.unpack('>h', trace_header[124:126])[0]  # 125-126: Correlated: 1 = no, 2 = yes
+            sweep_freq_start = struct.unpack('>h', trace_header[126:128])[0]  # 127-128: Sweep frequency at start (Hz)
+            sweep_freq_end = struct.unpack('>h', trace_header[128:130])[0]  # 129-130: Sweep frequency at end (Hz)
+            sweep_length = struct.unpack('>h', trace_header[130:132])[0]  # 131-132: Sweep length in milliseconds
+            sweep_type = struct.unpack('>h', trace_header[132:134])[0]  # 133-134: Sweep type
+            sweep_taper_length_start = struct.unpack('>h', trace_header[134:136])[0]  # 135-136: Sweep taper length at start in milliseconds
+            sweep_taper_length_end = struct.unpack('>h', trace_header[136:138])[0]  # 137-138: Sweep taper length at end in milliseconds
+            taper_type = struct.unpack('>h', trace_header[138:140])[0]  # 139-140: Taper type
+            alias_filter_freq = struct.unpack('>h', trace_header[140:142])[0]  # 141-142: Alias filter frequency (Hz)
+            alias_filter_slope = struct.unpack('>h', trace_header[142:144])[0]  # 143-144: Alias filter slope (dB/octave)
+            notch_filter_freq = struct.unpack('>h', trace_header[144:146])[0]  # 145-146: Notch filter frequency (Hz)
+            notch_filter_slope = struct.unpack('>h', trace_header[146:148])[0]  # 147-148: Notch filter slope (dB/octave)
+            low_cut_freq = struct.unpack('>h', trace_header[148:150])[0]  # 149-150: Low-cut frequency (Hz)
+            high_cut_freq = struct.unpack('>h', trace_header[150:152])[0]  # 151-152: High-cut frequency (Hz)
+            low_cut_slope = struct.unpack('>h', trace_header[152:154])[0]  # 153-154: Low-cut slope (dB/octave)
+            high_cut_slope = struct.unpack('>h', trace_header[154:156])[0]  # 155-156: High-cut slope (dB/octave)
+            year_recorded = struct.unpack('>h', trace_header[156:158])[0]  # 157-158: Year data recorded
+            day_of_year = struct.unpack('>h', trace_header[158:160])[0]  # 159-160: Day of year (Julian day)
+            hour_of_day = struct.unpack('>h', trace_header[160:162])[0]  # 161-162: Hour of day (24-hour clock)
+            minute_of_hour = struct.unpack('>h', trace_header[162:164])[0]  # 163-164: Minute of hour
+            second_of_minute = struct.unpack('>h', trace_header[164:166])[0]  # 165-166: Second of minute
+            time_basis_code = struct.unpack('>h', trace_header[166:168])[0]  # 167-168: Time basis code
+            trace_weighting_factor = struct.unpack('>h', trace_header[168:170])[0]  # 169-170: Trace weighting factor
+            geophone_roll_pos_num = struct.unpack('>h', trace_header[170:172])[0]  # 171-172: Geophone group number of roll switch position
+            geophone_trace_one_num = struct.unpack('>h', trace_header[172:174])[0]  # 173-174: Geophone group number of trace number one
+            geophone_last_trace_num = struct.unpack('>h', trace_header[174:176])[0]  # 175-176: Geophone group number of last trace
+            gap_size = struct.unpack('>h', trace_header[176:178])[0]  # 177-178: Gap size (total number of groups dropped)
+            over_travel_taper = struct.unpack('>h', trace_header[178:180])[0]  # 179-180: Over travel associated with taper at end of line
+            x_coord_ensemble = struct.unpack('>i', trace_header[180:184])[0]  # 181-184: X coordinate of ensemble (CDP)
+            y_coord_ensemble = struct.unpack('>i', trace_header[184:188])[0]  # 185-188: Y coordinate of ensemble (CDP)
+            inline_number = struct.unpack('>i', trace_header[188:192])[0]  # 189-192: In-line number for 3-D poststack data
+            crossline_number = struct.unpack('>i', trace_header[192:196])[0]  # 193-196: Cross-line number for 3-D poststack data
+            shotpoint_number = struct.unpack('>i', trace_header[196:200])[0]  # 197-200: Shotpoint number
+            scalar_shotpoint_number = struct.unpack('>h', trace_header[200:202])[0]  # 201-202: Scalar to be applied to the shotpoint number
+            trace_value_unit = struct.unpack('>h', trace_header[202:204])[0]  # 203-204: Trace value measurement unit
+            transduction_constant_mantissa = struct.unpack('>i', trace_header[204:208])[0]  # 205-208: Transduction constant mantissa
+            transduction_constant_exponent = struct.unpack('>h', trace_header[208:210])[0]  # 209-210: Transduction constant exponent
+            transduction_units = struct.unpack('>h', trace_header[210:212])[0]  # 211-212: Transduction units
+            device_trace_identifier = struct.unpack('>h', trace_header[212:214])[0]  # 213-214: Device/Trace Identifier
+            scalar_time_value = struct.unpack('>h', trace_header[214:216])[0]  # 215-216: Scalar applied to time values
+            source_type_orientation = struct.unpack('>h', trace_header[216:218])[0]  # 217-218: Source type/orientation
+            source_energy_direction_mantissa = struct.unpack('>i', trace_header[218:222])[0]  # 219-222: 
+            source_energy_direction_exponent = struct.unpack('>h', trace_header[222:224])[0]  # 223-224: 
+            source_measurement_mantissa = struct.unpack('>i', trace_header[224:228])[0]  # 225-228: Source measurement mantissa
+            source_measurement_exponent = struct.unpack('>h', trace_header[228:230])[0]  # 229-230: Source measurement exponent
+            source_measurement_unit = struct.unpack('>h', trace_header[230:232])[0]  # 231-232: Source measurement unit
+            
+            trace_headers.append({
+                'Number of Samples': num_samples,
+                'Trace Seq Num Line': trace_seq_num_line,
+                'Trace Seq Num File': trace_seq_num_file,
+                'Field Record Num': field_record_num,
+                'Trace Num Within Field': trace_num_within_field,
+                'Energy Source Point Num': energy_source_point_num,
+                'Ensemble Num': ensemble_num,
+                'Trace Num Within Ensemble': trace_num_within_ensemble,
+                'Trace ID Code': trace_id_code,
+                'Vert Sum Traces': vert_sum_traces,
+                'Horiz Sum Traces': horiz_sum_traces,
+                'Data Use': data_use,
+                'Source Receiver Distance': source_receiver_distance,
+                'Receiver Group Elevation': receiver_group_elevation,
+                'Surface Elevation Source': surface_elevation_source,
+                'Source Depth Below Surface': source_depth_below_surface,
+                'Datum Elevation Receiver Group': datum_elevation_receiver_group,
+                'Datum Elevation Source': datum_elevation_source,
+                'Water Depth Source': water_depth_source,
+                'Water Depth Group': water_depth_group,
+                'Scalar Elevations': scalar_elevations,
+                'Scalar Coordinates': scalar_coordinates,
+                'Source Coordinate X': source_coordinate_x,
+                'Source Coordinate Y': source_coordinate_y,
+                'Group Coordinate X': group_coordinate_x,
+                'Group Coordinate Y': group_coordinate_y,
+                'Coordinate Units': coordinate_units,
+                'Weathering Velocity': weathering_velocity,
+                'Subweathering Velocity': subweathering_velocity,
+                'Uphole Time Source (milisecond)': uphole_time_source_ms,
+                'Uphole Time Group (milisecond)': uphole_time_group_ms,
+                'Source Static Correction (milisecond)': source_static_corr_ms,
+                'Group Static Correction (milisecond)': group_static_corr_ms,
+                'Total Static Applied (milisecond)': total_static_ms,
+                'Lag Time A (milisecond)': lag_time_A_ms,
+                'Lag Time B (milisecond)': lag_time_B_ms,
+                'Delay Recording Time (milisecond)': delay_recording_time_ms,
+                'Mute Time Start (milisecond)': mute_time_start_ms,
+                'Mute Time End (milisecond)': mute_time_end_ms,
+                'Number of Samples': num_samples,
+                'Sample Interval': sample_interval,
+                'Gain Type': gain_type,
+                'Instrument Gain Constant': instrument_gain_const,
+                'Instrument Early Gain': instrument_early_gain,
+                'Correlated': correlated,
+                'Sweep Frequency Start': sweep_freq_start,
+                'Sweep Frequency End': sweep_freq_end,
+                'Sweep Length': sweep_length,
+                'Sweep Type': sweep_type,
+                'Sweep Taper Length Start': sweep_taper_length_start,
+                'Sweep Taper Length End': sweep_taper_length_end,
+                'Taper Type': taper_type,
+                'Alias Filter Frequency': alias_filter_freq,
+                'Alias Filter Slope': alias_filter_slope,
+                'Notch Filter Frequency': notch_filter_freq,
+                'Notch Filter Slope': notch_filter_slope,
+                'Low-Cut Frequency': low_cut_freq,
+                'High-Cut Frequency': high_cut_freq,
+                'Low-Cut Slope': low_cut_slope,
+                'High-Cut Slope': high_cut_slope,
+                'Year Recorded': year_recorded,
+                'Day of Year': day_of_year,
+                'Hour of Day': hour_of_day,
+                'Minute of Hour': minute_of_hour,
+                'Second of Minute': second_of_minute,
+                'Time Basis Code': time_basis_code,
+                'Trace Weighting Factor': trace_weighting_factor,
+                'Geophone Roll Position Number': geophone_roll_pos_num,
+                'Geophone Trace One Number': geophone_trace_one_num,
+                'Geophone Last Trace Number': geophone_last_trace_num,
+                'Gap Size': gap_size,
+                'Over Travel Taper': over_travel_taper,
+                'X Coordinate Ensemble': x_coord_ensemble,
+                'Y Coordinate Ensemble': y_coord_ensemble,
+                'Inline Number': inline_number,
+                'Crossline Number': crossline_number,
+                'Shotpoint Number': shotpoint_number,
+                'Scalar Shotpoint Number': scalar_shotpoint_number,
+                'Trace Value Unit': trace_value_unit,
+                'Transduction Constant Mantissa': transduction_constant_mantissa,
+                'Transduction Constant Exponent': transduction_constant_exponent,
+                'Transduction Units': transduction_units,
+                'Device/Trace Identifier': device_trace_identifier,
+                'Scalar Time Value': scalar_time_value,
+                'Source Type/Orientation': source_type_orientation,
+                'Source Energy Direction Mentissa': source_energy_direction_mantissa,
+                'Source Energy Direction Exponent': source_energy_direction_exponent,
+                'Source Measurement Mantissa': source_measurement_mantissa,
+                'Source Measurement Exponent': source_measurement_exponent,
+                'Source Measurement Unit': source_measurement_unit,
+                # Add other fields here...
+            })
+
+            # Read the trace data
+            trace_data = file.read(ns * 4)  # Assuming 4 bytes per sample (Data Sample Format = 5)
+            
+            if len(trace_data) < ns * 4:
+                break  # End of file or corrupt trace data
+            
+    with open(output_file, 'w') as file:
+        for i, trace in enumerate(trace_headers, 1):
+            for key, value in trace.items():
+                file.write(f"{key}: {value}, ")
+            file.write("}\n")  # Close the dictionary and move to the next line for the next trace
+
+
+def seismo_get_segy_number_of_traces(file_path):
+    with open(file_path, 'rb') as file:
+        file.seek(3200)
+        binary_header = file.read(400)
+        num_extended_headers = struct.unpack('>h', binary_header[304:306])[0]
+        dt = struct.unpack('>h', binary_header[16:18])[0]
+        ns = int((10**6/dt)*60)
+        start = file.seek(3600 + (num_extended_headers*3200))
+        file_size = os.path.getsize(file_path)
+        ntraces = (file_size-start) / (240+(ns*4))
+    return ntraces
+
+
+def seismo_segy_remove_extended_headers(file_path):
+    """
+
+    Warning: This function is written for reading the SEGY files coming from the Geospace GSB3s 
+    at Institute of seismology - University of Helsinki. SEGY files with other configurations might
+    not work 
+
+    For the segy files that have extended headers
+    Obspy do not read Segy files with exteneded headers. The extended headers 
+    can be removed and the parameter in the binary header pointing out to the extended 
+    headers should change to 0. 
+
+    This function Reads a SEG Y file and returns another SEG Y file with no extended header
+    The output will be saved in the same directory as the input path with "removed_ex_headers_" followed by 
+    the input name
+
+    :type file_path: String
+    :param file_path: local path of the SEG Y rev1 file to be read.
+
+    :Returns SEG Y File: The same SEG Y file without Extended Header
+    """
+    input_dir = os.path.dirname(file_path)
+    input_name = os.path.basename(file_path)
+    output_name = "removed_ex_headers_" + input_name
+    output_segy = os.path.join(input_dir, output_name)
+    with open(file_path, 'rb') as infile:
+        # Step 1: Read the initial 3200-byte textual header
+        textual_header = infile.read(3200)
+
+        # Step 2: Read the 400-byte binary header
+        binary_header = bytearray(infile.read(400))  # Use bytearray to allow modifications
+
+        # Step 3: Extract the number of extended textual headers from the binary header
+        num_extended_headers = struct.unpack('>h', binary_header[304:306])[0]
+        print(f"Number of Extended Textual Headers: {num_extended_headers}")
+        
+        if(num_extended_headers > 0):
+            # Modify the bytes 305-306 in the binary header to set the number of extended headers to 0
+            binary_header[304:306] = struct.pack('>h', 0)
+
+            # Step 4: Skip the extended textual headers
+            infile.seek(num_extended_headers * 3200, os.SEEK_CUR)
+
+            # Step 5: Read the rest of the file and write to a new file
+            with open(output_segy, 'wb') as outfile:
+                # Write the initial 3200-byte textual header
+                outfile.write(textual_header)
+
+                # Write the modified 400-byte binary header
+                outfile.write(binary_header)
+
+                # Write the rest of the data (starting from the first trace header)
+                while True:
+                    data = infile.read(4096)
+                    if not data:
+                        break
+                    outfile.write(data)
+            return outfile
+        elif:
+            print("No extended header were identified, No changes were made. aborting...")
+    return 
+
+
+def seismo_segy_read_extended_textual_headers(file_path):
+    """
+    This function reads the extended textual headers (if there is any)
+
+    :type file_path: String
+    :param file_path: local path of the SEG Y rev1 file to be read.
+
+    :Returns String: Extended Textual Headers
+    """
+    headers = []
+    bytesize = 0
+    with open(file_path, 'rb') as file:
+        # Skip the first 3600 bytes (Textual Header + Binary Header)
+        file.seek(3600)
+        
+        while True:
+            # Read the next 3200 bytes to check for the Extended Textual File Header
+            extended_header = file.read(3200)
+            
+            # If the block is empty, we've reached the end of the extended headers
+            if not extended_header:
+                break
+            
+            # Check if it's a valid text block (Extended Textual Header)
+            if all(32 <= byte <= 126 or byte == 10 or byte == 13 for byte in extended_header):
+                headers.append(extended_header.decode('ascii').strip())
+                bytesize+=len(extended_header)
+            else:
+                break  # Exit the loop if the block is not a textual header
+    
+    formatted_header = ""
+    for header in headers:
+        formatted_header += header.replace("\r\n", "\n") + "\n"
+    return formatted_header
+
+
+def seismo_segy_read_num_samples_from_textual_header(textual_header):
+    # Define regular expression patterns to find the relevant information
+    sample_interval_pattern = re.compile(r'SAMPLE INTERVAL:\s*([\d.]+)\s*msec')
+    num_samples_pattern = re.compile(r'SAMPLES/TRACE:\s*(\d+)')
+
+    # Search the header for the patterns
+    ns_text = num_samples_pattern.search(textual_header)
+    sam_interval = sample_interval_pattern.search(textual_header)
+
+    # Extract the number of samples from the match object, if found
+    if ns_text:
+        ns = int(ns_text.group(1))
+    else:
+        ns = None
+
+    # Extract the sample interval from the match object, if found, and convert to microseconds
+    if sam_interval:
+        # Convert sample interval from milliseconds to microseconds
+        si_ms = float(sam_interval.group(1))
+        si = si_ms * 1000
+    else:
+        si = None
+
+    return (ns, si)
+
+
+def seismo_segy_read_binary_header(file_path):
+    with open(file_path, 'rb') as file:
+        # Skip the Textual Header (first 3200 bytes)
+        file.seek(3200)
+        # Read the next 400 bytes (Binary Header)
+        binary_header = file.read(400)
+        # Parse important fields from the Binary Header using struct.unpack
+        # Job Identification Number (bytes 1-4)
+        job_id = struct.unpack('>i', binary_header[0:4])[0]
+        # Line Number (bytes 5-8)
+        line_number = struct.unpack('>i', binary_header[4:8])[0]
+        # Reel Number (bytes 9-12)
+        reel_number = struct.unpack('>i', binary_header[8:12])[0]
+        # Number of Traces per Ensemble (bytes 13-14)
+        traces_per_ensemble = struct.unpack('>h', binary_header[12:14])[0]
+        # Number of Traces per Ensemble (bytes 15-16)
+        auxiliary_trace_per_ensemble  = struct.unpack('>h', binary_header[14:16])[0]
+        # Sample interval in microseconds (bytes 17-18)
+        dt = struct.unpack('>h', binary_header[16:18])[0]
+        # Sample interval in microseconds of original field recording (bytes 19-20)
+        dtOrig = struct.unpack('>h', binary_header[18:20])[0]
+        # Number of Samples (bytes 21-22)
+        ns = struct.unpack('>h', binary_header[20:22])[0]
+        # Number of Samples per data trace for original field recording (bytes 23-24)
+        nsOrig = struct.unpack('>h', binary_header[22:24])[0]
+        # Data Sample Format (bytes 25-26)
+        data_sample_format = struct.unpack('>h', binary_header[24:26])[0]
+        # Ensemble fold (bytes 27-28))
+        ensemble_fold = struct.unpack('>h', binary_header[26:28])[0]
+        # Trace Sorting (bytes 29-30))
+        trace_sorting = struct.unpack('>h', binary_header[28:30])[0]
+        # Vertical Sum Code (bytes 31-32)
+        vertical_sum_code = struct.unpack('>h', binary_header[30:32])[0]
+        # Sweep Frequency at Start (bytes 33-34)
+        sweep_freq_start = struct.unpack('>h', binary_header[32:34])[0]
+        # Sweep Frequency at End (bytes 35-36)
+        sweep_freq_end = struct.unpack('>h', binary_header[34:36])[0]
+        # Sweep Length in ms (bytes 37-38)
+        sweep_length = struct.unpack('>h', binary_header[36:38])[0]
+        # Sweep Type Code (bytes 39-40)
+        sweep_type = struct.unpack('>h', binary_header[38:40])[0]
+        # Trace Number of Sweep Channel (bytes 41-42)
+        trace_sweep_channel = struct.unpack('>h', binary_header[40:42])[0]
+        # Sweep Trace Taper Length at Start (bytes 43-44)
+        sweep_taper_start = struct.unpack('>h', binary_header[42:44])[0]
+        # Sweep Trace Taper Length at End (bytes 45-46)
+        sweep_taper_end = struct.unpack('>h', binary_header[44:46])[0]
+        # Taper Type (bytes 47-48)
+        taper_type = struct.unpack('>h', binary_header[46:48])[0]
+        # Correlated Data Traces (bytes 49-50)
+        correlated_traces = struct.unpack('>h', binary_header[48:50])[0]
+        # Binary Gain Recovered (bytes 51-52)
+        binary_gain = struct.unpack('>h', binary_header[50:52])[0]
+        # Amplitude Recovery Method (bytes 53-54)
+        amplitude_recovery = struct.unpack('>h', binary_header[52:54])[0]
+        # Measurement System (bytes 55-56)
+        measurement_system = struct.unpack('>h', binary_header[54:56])[0]
+        # Impulse Signal Polarity (bytes 57-58)
+        signal_polarity = struct.unpack('>h', binary_header[56:58])[0]
+        # Vibratory Polarity Code (bytes 59-60)
+        vibratory_polarity = struct.unpack('>h', binary_header[58:60])[0]
+        # SEG-Y Format Revision Number (bytes 301-302)
+        seg_y_revision = struct.unpack('>H', binary_header[300:302])[0]
+        # Fixed Length Trace Flag (bytes 303-304)
+        fixed_length_trace_flag = struct.unpack('>h', binary_header[302:304])[0]
+        # Number of Extended Textual File Header Records (bytes 305-306)
+        num_extended_headers = struct.unpack('>h', binary_header[304:306])[0]
+        # Unassigned (bytes 307-400)
+        unassigned = struct.unpack('>47h', binary_header[306:400])
+
+        return {
+            'Job ID': job_id,
+            'Line Number': line_number,
+            'Reel Number': reel_number,
+            'Traces Per Ensemble': traces_per_ensemble,
+            'Auxiliary Traces Per Ensemble': auxiliary_trace_per_ensemble,
+            'Sampling Interval': dt,
+            'Sampling Interval Original': dtOrig,
+            'Number of Samples': ns,
+            'Number of Samples Original': nsOrig,
+            'Data Sample Format': data_sample_format,
+            'Ensemble Fold': ensemble_fold,
+            'Trace Sorting': trace_sorting,
+            'Vertical Sum Code': vertical_sum_code,
+            'Sweep Frequency Start': sweep_freq_start,
+            'Sweep Frequency End': sweep_freq_end,
+            'Sweep Length': sweep_length,
+            'Sweep Type': sweep_type,
+            'Trace Number of Sweep Channel': trace_sweep_channel,
+            'Sweep Taper Start Length': sweep_taper_start,
+            'Sweep Taper End Length': sweep_taper_end,
+            'Taper Type': taper_type,
+            'Correlated Data Traces': correlated_traces,
+            'Binary Gain Recovered': binary_gain,
+            'Amplitude Recovery Method': amplitude_recovery,
+            'Measurement System': measurement_system,
+            'Impulse Signal Polarity': signal_polarity,
+            'Vibratory Polarity': vibratory_polarity,
+            'SEG-Y Format Revision Number': seg_y_revision,
+            'Fixed Length Trace Flag': fixed_length_trace_flag,
+            'Number of Extended Textual File Header Records': num_extended_headers,
+            'Unassigned': unassigned
+        }
+
+
+def seismo_plot_two_streams_fdomain(stream1: Stream, stream2: Stream):
+    """
+    It plots two streams spectrum next to each other for comparison
+    """
+    # Create a figure with subplots
+    num_traces1 = len(stream1)
+    num_traces2 = len(stream2)
+    fig, axs = plt.subplots(nrows=max(num_traces1,num_traces2), ncols=2, figsize=(10, 6), sharex=True)
+    plt.xlim(0, 2)
+    # Plot the first Stream
+    for i, trace in enumerate(stream1):
+        fft_data, frequencies = fftspectrum(trace)
+        axs[i, 0].plot(frequencies, np.abs(fft_data), label=trace.id)
+        axs[i, 0].set_ylabel("Amplitude")
+        axs[i, 0].legend()
+        axs[i, 0].set_title(f"F spectrum - Channel {i + 1}")
+
+    # Plot the second Stream
+    for j, trace in enumerate(stream2):
+        fft_data, frequencies = fftspectrum(trace)
+        axs[j, 1].plot(frequencies, np.abs(fft_data), label=trace.id)
+        axs[j, 1].set_ylabel("Amplitude")
+        axs[j, 1].legend()
+        axs[j, 1].set_title(f"F spectrum - Chwannel {i + 1}")
+
+    # Set common labels
+    # axs[-1, 0].set_xlabel("Time (s)")
+    # axs[-1, 1].set_xlabel("Time (s)")
+    plt.tight_layout()
+    plt.show()
+
+
 def _write_segy(stream, filename, data_encoding=None, byteorder=None,
                 textual_header_encoding=None, **kwargs):  # @UnusedVariable
     """
@@ -722,4 +1347,5 @@ if __name__ == '__main__':
 # instance did not reliably work.
 setattr(Trace, '__original_str__', Trace.__str__)
 setattr(Trace, '__str__', _segy_trace_str_)
+
 
