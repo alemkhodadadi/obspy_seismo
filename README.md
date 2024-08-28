@@ -22,11 +22,12 @@
 ___
 
 ### Obspy-Seismo
-[![Obspy-Seismo](https://e7.pngegg.com/pngimages/545/768/png-clipart-university-of-helsinki-university-of-the-arts-helsinki-university-of-oslo-aalto-university-student-thumbnail.png)](https://www.helsinki.fi/en/institute-seismology)
+<a href="https://www.helsinki.fi/en/institute-seismology">
+  <img src="https://e7.pngegg.com/pngimages/545/768/png-clipart-university-of-helsinki-university-of-the-arts-helsinki-university-of-oslo-aalto-university-student-thumbnail.png" alt="UH logo" style="width:300px; height:auto; background-color:white;">
+</a>
 
 
-This project is forked from main <a href="https://github.com/obspy/obspy">Obspy</a> project. The goal is to have some customized functions for working with local files at the Institute of Seismology - University of Helsinki. 
-All the functions are the same as original Obspy. The customized functions will be added in the following section (Versions). 
+This project is a fork of the main  <a href="https://github.com/obspy/obspy">Obspy</a>  repository, customized for handling local files at the Institute of Seismology, University of Helsinki. It retains all original ObsPy functions, with additional custom functions detailed in the Versions section.
 
 
 **v1.0.0:**
