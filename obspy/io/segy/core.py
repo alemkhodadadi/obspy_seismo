@@ -25,6 +25,9 @@ from .segy import (SEGYBinaryFileHeader, SEGYError, SEGYFile, SEGYTrace,
                    SEGYTraceHeader, SUFile,
                    autodetect_endian_and_sanity_check_su)
 from .util import unpack_header_value
+import os
+import struct
+import codecs
 
 
 # Valid data format codes as specified in the SEGY rev1 manual.
@@ -337,12 +340,12 @@ def seismo_read_trace_headers(file_path):
     output_file = os.path.join(directory, f"output_segy_traces_headers_{base_name}.txt")
     trace_headers = []
     
-    textual_header = read_textual_header(segy_file_path)
-    binary_header = read_binary_header(segy_file_path)
+    textual_header = seismo_segy_read_textual_header(file_path)
+    binary_header = seismo_segy_read_binary_header(file_path)
 
     #finding ns
     ns_in_binaryheader = binary_header['Number of Samples']
-    ns_in_textualheader, si_in_textualheader = read_num_samples_from_textual_header(textual_header)
+    ns_in_textualheader, si_in_textualheader = seismo_segy_read_num_samples_from_textual_header(textual_header)
     ns = ns_in_binaryheader
     if isinstance(ns_in_textualheader, int):
         ns = int((10**6/si_in_textualheader)*60) #Geospace software always make traces length = 60s and also the sampling interval is in microseconds
