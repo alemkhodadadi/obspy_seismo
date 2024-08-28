@@ -582,14 +582,13 @@ def seismo_segy_remove_extended_headers(file_path):
     at Institute of seismology - University of Helsinki. SEGY files with other configurations might
     not work 
 
-    For the segy files that have extended headers
+    For the segy files that have extended headers. 
     Obspy do not read Segy files with exteneded headers. The extended headers 
     can be removed and the parameter in the binary header pointing out to the extended 
     headers should change to 0. 
 
-    This function Reads a SEG Y file and returns another SEG Y file with no extended header
-    The output will be saved in the same directory as the input path with "removed_ex_headers_" followed by 
-    the input name
+    This function Reads a SEG Y file and will write another SEG Y file with no extended header.
+    The output will be saved in the same directory as the input path with name removed_ex_headers_+inputname .
 
     :type file_path: String
     :param file_path: local path of the SEG Y rev1 file to be read.
@@ -632,10 +631,10 @@ def seismo_segy_remove_extended_headers(file_path):
                     if not data:
                         break
                     outfile.write(data)
-            return outfile
+            return output_segy
         else:
             print("No extended header were identified, No changes were made. aborting...")
-    return 
+    return ""
 
 
 def seismo_segy_read_extended_textual_headers(file_path):
