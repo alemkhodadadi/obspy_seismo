@@ -28,7 +28,7 @@ ___
 
 
 This project is a customized fork of the main <a href="https://github.com/obspy/obspy">Obspy</a> repository, specifically tailored for handling local files at the Institute of Seismology, University of Helsinki.
-By installing ObsPy from this repository, you will retain all original ObsPy functions without any conflicts, ensuring compatibility with projects that directly use ObsPy or depend on it. Details of the additional custom functions can be found in the following section."
+By installing ObsPy from this repository, you will retain all original ObsPy functions without any conflicts, ensuring compatibility with projects that directly use ObsPy or depend on it (The Package name is "Obspy" and "Obspy-Seismo" is just the name of the project). Details of the additional custom functions can be found in the following section.
 
 
 **v1.0.0:**
@@ -58,6 +58,7 @@ streams[0].plot()
 **Obspy-Seismo Installation** 
 
 before Installing, you should have [Git](https://docs.github.com/en/desktop/installing-and-authenticating-to-github-desktop/installing-github-desktop) already installed on your machine. 
+
 If ObsPy is not yet installed on your machine:
 
 <code>pip install git+https://github.com/alemkhodadadi/obspy_seismo.git</code>
