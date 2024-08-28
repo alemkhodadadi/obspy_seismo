@@ -933,7 +933,6 @@ class SEGYTraceHeader(object):
 
 def _read_segy(file, endian=None, textual_header_encoding=None,
                unpack_headers=False, headonly=False, trace_duration=None):
-    print('step 2:', trace_duration)
     """
     Reads a SEG Y file and returns a SEGYFile object.
 
@@ -976,7 +975,7 @@ def _read_segy(file, endian=None, textual_header_encoding=None,
 
 def _internal_read_segy(file, endian=None, textual_header_encoding=None,
                         unpack_headers=False, headonly=False,trace_duration=None):
-    print('step 3:', trace_duration)
+
     """
     Reads on open file object and returns a SEGYFile object.
 
