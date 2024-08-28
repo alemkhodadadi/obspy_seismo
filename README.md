@@ -19,6 +19,53 @@
 
 <a rel="me" href="https://fosstodon.org/@obspy"><img src="https://img.shields.io/mastodon/follow/109309284431089274?domain=https%3A%2F%2Ffosstodon.org&style=social" alt="Mastodon Follow" /></a>
 
+___
+
+### Obspy-Seismo
+[![Obspy-Seismo](https://e7.pngegg.com/pngimages/545/768/png-clipart-university-of-helsinki-university-of-the-arts-helsinki-university-of-oslo-aalto-university-student-thumbnail.png)](https://www.helsinki.fi/en/institute-seismology)
+
+
+This project is forked from main <a href="https://github.com/obspy/obspy">Obspy</a> project. The goal is to have some customized functions for working with local files at the Institute of Seismology - University of Helsinki. 
+All the functions are the same as original Obspy. The customized functions will be added in the following section (Versions). 
+
+
+**v1.0.0:**
+
+Custom functions for working with SEG Y files from the Geospace GSB3 instruments.  
+The list of functions are:
+
+  * seismo_read_segy_
+  * seismo_segy_read_textual_header
+  * seismo_read_trace_headers
+  * seismo_get_segy_number_of_traces
+  * seismo_segy_remove_extended_headers
+  * seismo_segy_read_extended_textual_headers
+  * seismo_segy_read_num_samples_from_textual_header
+  * seismo_segy_read_binary_header
+  * seismo_plot_two_streams_fdomain
+
+
+```python
+from obspy.io.segy.core import seismo_read_segy_
+file_path = "home/user/segyfile.sgy"
+streams = seismo_read_segy_(file_path, trace_duration=60000)
+print(streams) # will return an array of streams for different components
+streams[0].plot()
+```
+
+**Obspy-Seismo Installation** 
+
+before Installing, you should have [Git](https://docs.github.com/en/desktop/installing-and-authenticating-to-github-desktop/installing-github-desktop) already installed on your machine. Then run the following command in terminal to install Obspy-Seismo
+
+<code>pip install git+https://github.com/alemkhodadadi/obspy_seismo.git</code>
+
+for updating: 
+
+<code>pip install --upgrade git+https://github.com/alemkhodadadi/obspy_seismo.git</code>
+
+___
+
+
 ObsPy is an open-source project dedicated to provide a **Python framework for processing seismological** data. It provides parsers for common file formats, clients to access data centers and seismological signal processing routines which allow the manipulation of seismological time series (see [Beyreuther et al. 2010](http://www.seismosoc.org/publications/SRL/SRL_81/srl_81-3_es/), [Megies et al. 2011](http://www.annalsofgeophysics.eu/index.php/annals/article/view/4838), [Krischer et al. 2015](http://iopscience.iop.org/article/10.1088/1749-4699/8/1/014003)).
 
 The goal of the ObsPy project is to facilitate **rapid application development for seismology**.

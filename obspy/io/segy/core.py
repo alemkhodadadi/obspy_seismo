@@ -630,7 +630,7 @@ def seismo_segy_remove_extended_headers(file_path):
                         break
                     outfile.write(data)
             return outfile
-        elif:
+        else:
             print("No extended header were identified, No changes were made. aborting...")
     return 
 
