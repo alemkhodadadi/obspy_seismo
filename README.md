@@ -56,7 +56,7 @@ streams[0].plot()
 
 **Obspy-Seismo Installation** 
 
-before Installing, you should have [Git](https://docs.github.com/en/desktop/installing-and-authenticating-to-github-desktop/installing-github-desktop) already installed on your machine. Then run the following command in terminal to install Obspy-Seismo
+before Installing, you should have [Git](https://docs.github.com/en/desktop/installing-and-authenticating-to-github-desktop/installing-github-desktop) already installed on your machine. Then run the following command in terminal to install Obspy-Seismo.
 
 <code>pip install git+https://github.com/alemkhodadadi/obspy_seismo.git</code>
 
