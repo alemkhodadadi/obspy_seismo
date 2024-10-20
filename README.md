@@ -37,7 +37,7 @@ By installing ObsPy from this repository, you will retain all original ObsPy fun
 
 **v1.0.0:**
 
-Custom functions for working with SEG Y files from the Geospace GSB3 instruments.  
+Custom functions for working with big (more than 2GB) SEG Y files.  
 The list of functions are:
 
   * seismo_read_segy_
