@@ -25,17 +25,6 @@ ___
 
 **Note: The section between the two 3-line segments has been added specifically for Obspy-seismo. The rest of the instructions pertain to the main Obspy page.**
 
-### Obspy-Seismo
-<a href="https://www.helsinki.fi/en/institute-seismology">
-  <img src="https://www.helsinki.fi/assets/drupal/s3fs-public/styles/uncropped_image/public/migrated-unit-group-pages/pt5/body-images/134206-university-of-helsinki-logo.png.webp?itok=fkxkM1cs" alt="UH logo" style="width:60%; height:auto; background-color:white;">
-</a>
-
-
-This project is a customized fork of the main <a href="https://github.com/obspy/obspy">Obspy</a> repository, specifically tailored for handling local files at the Institute of Seismology, University of Helsinki.
-By installing ObsPy from this repository, you will retain all original ObsPy functions without any conflicts, ensuring compatibility with projects that directly use ObsPy or depend on it (The Package name is "Obspy" and "Obspy-Seismo" is just the name of the project). Details of the additional custom functions can be found in the following section.
-
-
-**v1.0.0:**
 
 Custom functions for working with big (more than 2GB) SEG Y files.  
 The list of functions are:
